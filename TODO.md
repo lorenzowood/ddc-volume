@@ -14,7 +14,7 @@ The current architecture (rate-limited in-memory state → command dispatch → 
 
 ### Backends to consider
 
-- **DDC** (current) — external monitors via m1ddc
+- **DDC** (current) — external monitors via m1ddc; see also [AppleSiliconDDC](https://github.com/waydabber/AppleSiliconDDC), a Swift library by the same author that speaks DDC natively without requiring m1ddc to be installed — refactoring the DDC backend to link against this library directly would remove the external tool dependency
 - **macOS system audio** — `osascript`/CoreAudio; would let this tool replace the system Sound menu item entirely
 - **Behringer (and other USB mixers)** — MIDI sysex or HID; the mixer presents as a USB device and its main output level can be set programmatically
 - **HomeAssistant** — REST/WebSocket API to control a media player or number entity; useful where the audio zone is separate from the display (e.g. a kitchen screen that sometimes routes audio to a whole-room system)
