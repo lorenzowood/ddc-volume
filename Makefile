@@ -30,7 +30,7 @@ install: build
 	mkdir -p "$(LAUNCH_AGENTS)"
 	sed 's|__DAEMON_PATH__|$(PREFIX)/ddc-volume-daemon|g' "$(PLIST).template" \
 		> "$(LAUNCH_AGENTS)/$(PLIST)"
-	-launchctl bootout gui/$$(id -u) "$(LAUNCH_AGENTS)/$(PLIST)" 2>/dev/null
+	launchctl bootout gui/$$(id -u) "$(LAUNCH_AGENTS)/$(PLIST)" 2>/dev/null || true
 	launchctl bootstrap gui/$$(id -u) "$(LAUNCH_AGENTS)/$(PLIST)"
 	@echo "Installed and started."
 

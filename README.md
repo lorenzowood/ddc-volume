@@ -110,6 +110,24 @@ Click the volume bar in the menu bar to open a dropdown with:
 - A slider for direct volume adjustment
 - A monitor selector — click any listed monitor to switch control to it (session only; edit `config.json` to change the default)
 
+## Troubleshooting
+
+**Menu bar icon is gone after a reboot**
+
+The launchd agent plist may have been lost. Re-running `make install` is safe and idempotent — it reinstalls the plist and starts the daemon immediately:
+
+```sh
+make install
+```
+
+**Daemon is running but not responding**
+
+```sh
+make restart
+```
+
+Check `/tmp/ddc-volume.log` for errors.
+
 ## Makefile targets
 
 ```sh
