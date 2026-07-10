@@ -1,5 +1,6 @@
 import AppKit
 import Common
+import ServiceManagement
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem?
@@ -12,6 +13,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let statusMenu   = NSMenu()
     private var sliderView   = VolumeSliderView()
     private var monitorMenuItemsIndex = 3  // items at this index and beyond are monitor rows
+    private let loginItem = NSMenuItem(
+        title: "Start at Login",
+        action: #selector(toggleStartAtLogin),
+        keyEquivalent: ""
+    )
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -36,6 +42,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         setupMenu()
         startServer()
         startTimer()
+        registerLoginItemIfNeeded()
 
         if config.readVolumeOnStartup {
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -86,6 +93,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         monitorMenuItemsIndex = statusMenu.items.count
 
+        // Footer — stays below the monitor rows, which are inserted above this
+        // point in rebuildMonitorItems() rather than appended to the end.
+        statusMenu.addItem(.separator())
+        loginItem.target = self
+        statusMenu.addItem(loginItem)
+        statusMenu.addItem(.separator())
+        let quitItem = NSMenuItem(
+            title: "Quit",
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        )
+        quitItem.target = NSApp
+        statusMenu.addItem(quitItem)
+
         // Attach menu to button
         statusItem?.menu = statusMenu
     }
@@ -93,17 +114,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         sliderView.setVolume(state.desired)
         rebuildMonitorItems()
+        loginItem.state = (SMAppService.mainApp.status == .enabled) ? .on : .off
     }
 
     private func rebuildMonitorItems() {
-        // Remove old monitor rows
-        while statusMenu.items.count > monitorMenuItemsIndex {
+        // Remove old monitor rows (footer items below stay in place)
+        while statusMenu.items.count > monitorMenuItemsIndex,
+              !isFooterItem(statusMenu.items[monitorMenuItemsIndex]) {
             statusMenu.removeItem(at: monitorMenuItemsIndex)
         }
 
         let monitors = (try? monitor.listMonitors()) ?? []
         let active   = monitor.activeMonitorId
 
+        var insertAt = monitorMenuItemsIndex
         for info in monitors {
             let item = NSMenuItem(
                 title: info.name,
@@ -113,7 +137,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item.representedObject = info.id
             item.state = (info.id == active) ? .on : .off
             item.target = self
-            statusMenu.addItem(item)
+            statusMenu.insertItem(item, at: insertAt)
+            insertAt += 1
         }
 
         // Fallback if list fails or is empty
@@ -122,8 +147,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                   action: nil, keyEquivalent: "")
             item.state = .on
             item.isEnabled = false
-            statusMenu.addItem(item)
+            statusMenu.insertItem(item, at: insertAt)
         }
+    }
+
+    private func isFooterItem(_ item: NSMenuItem) -> Bool {
+        item.isSeparatorItem || item === loginItem
     }
 
     @objc private func selectMonitor(_ sender: NSMenuItem) {
@@ -173,6 +202,35 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } catch {
             NSLog("[ddc-volume] setVolume error: \(error)")
         }
+    }
+
+    // MARK: - Login item
+
+    // Registers on the very first launch of the bundled app so behaviour
+    // matches the old always-autostart install; afterwards the user's own
+    // toggling via the menu (or System Settings) is left alone.
+    private func registerLoginItemIfNeeded() {
+        let key = "didInitLoginItem"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.set(true, forKey: key)
+        do {
+            try SMAppService.mainApp.register()
+        } catch {
+            NSLog("[ddc-volume] Login item registration failed: \(error)")
+        }
+    }
+
+    @objc private func toggleStartAtLogin() {
+        do {
+            if SMAppService.mainApp.status == .enabled {
+                try SMAppService.mainApp.unregister()
+            } else {
+                try SMAppService.mainApp.register()
+            }
+        } catch {
+            NSLog("[ddc-volume] Login item toggle failed: \(error)")
+        }
+        loginItem.state = (SMAppService.mainApp.status == .enabled) ? .on : .off
     }
 }
 

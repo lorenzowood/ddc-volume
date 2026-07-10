@@ -39,7 +39,7 @@ cd ddc-volume
 make install
 ```
 
-`make install` builds the project, copies the binaries to `~/.local/bin/`, installs a launchd agent so the daemon starts on login, and writes an example config file.
+`make install` builds the project, packages the menu bar app as `DDC Volume.app` in `/Applications`, installs the `ddc-volume` CLI to `~/.local/bin/`, and writes an example config file. The app registers itself to start at login the first time it launches — see [Menu bar](#menu-bar) below to toggle this, or check System Settings → General → Login Items, where it appears as "DDC Volume".
 
 Make sure `~/.local/bin` is in your `PATH`:
 
@@ -109,12 +109,14 @@ Click the volume bar in the menu bar to open a dropdown with:
 
 - A slider for direct volume adjustment
 - A monitor selector — click any listed monitor to switch control to it (session only; edit `config.json` to change the default)
+- **Start at Login** — checkbox reflecting whether the app is registered to launch at login (backed by `SMAppService`, the same mechanism System Settings → General → Login Items uses); toggle it from either place
+- **Quit**
 
 ## Troubleshooting
 
 **Menu bar icon is gone after a reboot**
 
-The launchd agent plist may have been lost. Re-running `make install` is safe and idempotent — it reinstalls the plist and starts the daemon immediately:
+Check System Settings → General → Login Items for "DDC Volume" — if it's missing or shows an error, re-running `make install` is safe and idempotent:
 
 ```sh
 make install
@@ -126,16 +128,22 @@ make install
 make restart
 ```
 
-Check `/tmp/ddc-volume.log` for errors.
+There's no `/tmp/ddc-volume.log` anymore — the app logs via the unified logging system instead:
+
+```sh
+log stream --predicate 'process == "DDCVolumeDaemon"'
+```
+
+or open Console.app and filter on "DDCVolumeDaemon".
 
 ## Makefile targets
 
 ```sh
 make build      # Build (debug)
 make test       # Run tests
-make install    # Build release, install binaries and launchd agent
-make restart    # Restart the running daemon
-make uninstall  # Remove binaries and launchd agent (config preserved)
+make install    # Build release, install DDC Volume.app and the CLI
+make restart    # Restart the running app
+make uninstall  # Remove the app and CLI (config preserved)
 make clean      # Remove build artefacts
 ```
 
