@@ -107,7 +107,7 @@ The intended use is a keyboard with assignable knobs. Assign:
 
 Click the volume bar in the menu bar to open a dropdown with:
 
-- A slider for direct volume adjustment
+- A slider for direct volume adjustment, with a fixed speaker icon on the left that mirrors macOS's own system volume control: it shows 0–3 sound waves depending on level, and doubles as a mute button — click it (or run `ddc-volume mute`/`unmute`/`togglemute`) to mute, which shows an × next to the speaker and dims the slider without disabling it
 - A monitor selector — click any listed monitor to switch control to it (session only; edit `config.json` to change the default)
 - **Start at Login** — checkbox reflecting whether the app is registered to launch at login (backed by `SMAppService`, the same mechanism System Settings → General → Login Items uses); toggle it from either place
 - **Quit**

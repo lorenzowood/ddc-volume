@@ -33,7 +33,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         state.onChange = { [weak self] in
             guard let self = self else { return }
             self.updateStatusItem()
-            self.sliderView.setVolume(self.state.desired)
+            self.sliderView.update(volume: self.state.desired, muted: self.state.isMuted)
         }
 
         monitor = MonitorController(config: config)
@@ -79,6 +79,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         sliderView.onVolumeChange = { [weak self] volume in
             _ = self?.state.apply(.set(volume))
         }
+        sliderView.onMuteToggle = { [weak self] in
+            _ = self?.state.apply(.toggleMute)
+        }
+        sliderView.update(volume: state.desired, muted: state.isMuted)
         let sliderItem = NSMenuItem()
         sliderItem.view = sliderView
         statusMenu.addItem(sliderItem)
@@ -112,7 +116,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuWillOpen(_ menu: NSMenu) {
-        sliderView.setVolume(state.desired)
+        sliderView.update(volume: state.desired, muted: state.isMuted)
         rebuildMonitorItems()
         loginItem.state = (SMAppService.mainApp.status == .enabled) ? .on : .off
     }
