@@ -19,6 +19,13 @@ The trouble is that DDC monitors don't cope well with rapid sequential commands.
 
 The menu bar icon is a volume bar that reflects the desired volume instantly, giving visual feedback even before the monitor catches up.
 
+### Staying in sync with the monitor
+
+The monitor is the source of truth. If something else changes its volume (for example MonitorControl or the
+keyboard's volume keys), the app notices: it re-reads the monitor before applying a change that is more than
+5 seconds since the last read, and refreshes every 5 seconds while the screen is awake and nothing is pending (change or turn off in the menu under *Refresh from Monitor*). Pending knob steps are re-based onto the real level, so a click steps from where the monitor actually is, and an
+outside change while muted unmutes the display.
+
 ## Requirements
 
 - Apple Silicon Mac (M1 or later)

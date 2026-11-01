@@ -244,4 +244,79 @@ final class VolumeStateTests: XCTestCase {
         state.markSent(volume: 50)
         wait(for: [exp], timeout: 1)
     }
+
+    // MARK: - Reconcile with the monitor
+
+    private func synced(_ v: Int) {
+        state.initializeFromMonitor(v)
+    }
+
+    func testReconcileAdoptsOutsideChangeWhenIdle() {
+        synced(50)
+        XCTAssertTrue(state.reconcile(monitorVolume: 30, generation: state.generation))
+        XCTAssertEqual(state.desired, 30)
+        XCTAssertEqual(state.lastSent, 30)
+        XCTAssertNil(state.syncNeeded().volume)
+    }
+
+    func testReconcileIgnoresMatchingReading() {
+        synced(50)
+        XCTAssertFalse(state.reconcile(monitorVolume: 50, generation: state.generation))
+    }
+
+    func testReconcileRebasesPendingSteps() {
+        synced(50)
+        _ = state.apply(.up(5))                 // desired 55, monitor still believed 50
+        XCTAssertTrue(state.reconcile(monitorVolume: 30, generation: state.generation))
+        XCTAssertEqual(state.desired, 35)       // 30 + the pending +5
+        XCTAssertEqual(state.syncNeeded().volume, 35)
+    }
+
+    func testReconcileKeepsPendingAbsoluteSet() {
+        synced(50)
+        _ = state.apply(.set(80))
+        _ = state.reconcile(monitorVolume: 30, generation: state.generation)
+        XCTAssertEqual(state.desired, 80)
+        XCTAssertEqual(state.syncNeeded().volume, 80)
+    }
+
+    func testAbsoluteFlagClearsAfterSend() {
+        synced(50)
+        _ = state.apply(.set(80))
+        state.markSent(volume: 80)
+        _ = state.apply(.up(5))
+        _ = state.reconcile(monitorVolume: 30, generation: state.generation)
+        XCTAssertEqual(state.desired, 35)
+    }
+
+    func testReconcileDropsStaleReading() {
+        synced(50)
+        let gen = state.generation
+        _ = state.apply(.up(5))                 // happens while the read was in flight
+        XCTAssertFalse(state.reconcile(monitorVolume: 30, generation: gen))
+        XCTAssertEqual(state.desired, 55)
+    }
+
+    func testReconcileWhileMutedWithPendingKeepsMute() {
+        synced(50)
+        _ = state.apply(.mute)                  // pending: send 0
+        _ = state.reconcile(monitorVolume: 30, generation: state.generation)
+        XCTAssertTrue(state.isMuted)
+        XCTAssertEqual(state.desired, 50)
+        XCTAssertEqual(state.syncNeeded().volume, 0)
+    }
+
+    func testReconcileUnmutesWhenMonitorMovedWhileSettledMuted() {
+        synced(50)
+        _ = state.apply(.mute)
+        state.markSent(volume: 0)
+        _ = state.reconcile(monitorVolume: 40, generation: state.generation)
+        XCTAssertFalse(state.isMuted)
+        XCTAssertEqual(state.desired, 40)
+    }
+
+    func testReconcileDoesNothingBeforeFirstSync() {
+        XCTAssertFalse(state.reconcile(monitorVolume: 30, generation: state.generation))
+        XCTAssertEqual(state.desired, 50)
+    }
 }
