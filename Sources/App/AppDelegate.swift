@@ -9,19 +9,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var server: CommandServer!
     private var timer: RateTimer!
     private var config: Config!
-    // Touched only from the timer queue (and the screen-state flag from main).
-    private var lastReadAt = Date.distantPast
-    private var screenAwake = true
-    private let readBeforeActingAge: TimeInterval = 5   // re-read before applying a change if older than this
-    private static let refreshChoices: [(title: String, seconds: Int)] = [
-        ("Off", 0), ("2 seconds", 2), ("5 seconds", 5), ("10 seconds", 10), ("30 seconds", 30),
-    ]
-    private static let refreshKey = "refreshSeconds"
-    /// Background refresh interval in seconds (0 = off). Read from the timer queue, set from the menu.
-    private var pollSeconds: Int = {
-        UserDefaults.standard.object(forKey: AppDelegate.refreshKey) as? Int ?? 5
-    }()
-    private let refreshMenuItem = NSMenuItem(title: "Refresh from Monitor", action: nil, keyEquivalent: "")
 
     private let statusMenu   = NSMenu()
     private var sliderView   = VolumeSliderView()
@@ -56,15 +43,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         startServer()
         startTimer()
         registerLoginItemIfNeeded()
-
-        let wsnc = NSWorkspace.shared.notificationCenter
-        wsnc.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.screenAwake = false
-        }
-        wsnc.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.screenAwake = true
-            self?.lastReadAt = .distantPast   // refresh promptly on wake
-        }
 
         if config.readVolumeOnStartup {
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -112,18 +90,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Separator
         statusMenu.addItem(.separator())
 
-        // How often to re-read the volume from the monitor
-        let refreshMenu = NSMenu()
-        for choice in Self.refreshChoices {
-            let item = NSMenuItem(title: choice.title, action: #selector(selectRefresh(_:)), keyEquivalent: "")
-            item.tag = choice.seconds
-            item.target = self
-            refreshMenu.addItem(item)
-        }
-        refreshMenuItem.submenu = refreshMenu
-        statusMenu.addItem(refreshMenuItem)
-        statusMenu.addItem(.separator())
-
         // Section header — custom view gives full style control (bold, labelColor, no indent)
         let headerItem = NSMenuItem()
         headerItem.view = MenuSectionHeaderView(title: "Monitor")
@@ -149,13 +115,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem?.menu = statusMenu
     }
 
-    @objc private func selectRefresh(_ sender: NSMenuItem) {
-        pollSeconds = sender.tag
-        UserDefaults.standard.set(sender.tag, forKey: Self.refreshKey)
-    }
-
     func menuWillOpen(_ menu: NSMenu) {
-        refreshMenuItem.submenu?.items.forEach { $0.state = ($0.tag == pollSeconds) ? .on : .off }
         sliderView.update(volume: state.desired, muted: state.isMuted)
         rebuildMonitorItems()
         loginItem.state = (SMAppService.mainApp.status == .enabled) ? .on : .off
@@ -238,23 +198,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         timer.start()
     }
 
-    /// Reads the monitor and folds the result into the state. Runs on the timer queue,
-    /// so it never overlaps a write (DDC dislikes concurrent commands).
-    private func refreshFromMonitor() {
-        let gen = state.generation
-        guard let v = try? monitor.getCurrentVolume() else { return }
-        lastReadAt = Date()
-        state.reconcile(monitorVolume: v, generation: gen)
-    }
-
     private func timerTick() {
-        let age = Date().timeIntervalSince(lastReadAt)
-        if state.syncNeeded().volume != nil {
-            // About to change the volume: make sure we step from what the monitor really has.
-            if age > readBeforeActingAge { refreshFromMonitor() }
-        } else if screenAwake, pollSeconds > 0, age > TimeInterval(pollSeconds), state.lastSent != nil {
-            refreshFromMonitor()
-        }
         guard let v = state.syncNeeded().volume else { return }
         do {
             try monitor.setVolume(v)
