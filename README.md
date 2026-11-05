@@ -136,6 +136,12 @@ log stream --predicate 'process == "DDCVolumeDaemon"'
 
 or open Console.app and filter on "DDCVolumeDaemon".
 
+**Volume drops to zero, or the knob starts from a very low level**
+
+`m1ddc` occasionally reports a volume of `0` with a success exit status when the read didn't really work (roughly 1 in 10 reads on a Dell U4025QW). The app re-reads a `0` up to three more times and only believes it if it repeats, so a bogus read at startup or on switching monitors doesn't reset the app's idea of the volume.
+
+Only run one DDC volume controller at a time. Another tool (e.g. MonitorControl) changing the volume behind this app's back will leave it out of step with the monitor, and the app deliberately doesn't try to track outside changes.
+
 ## Makefile targets
 
 ```sh
