@@ -49,4 +49,28 @@ final class MonitorControllerTests: XCTestCase {
         let monitors = MonitorController.parseMonitorList(raw)
         XCTAssertEqual(monitors[0].name, "Samsung Odyssey G9")
     }
+
+    // MARK: - Bogus zero reads
+
+    private func reader(_ values: [Int]) -> (() throws -> Int, () -> Int) {
+        var i = 0
+        return ({ let v = values[min(i, values.count - 1)]; i += 1; return v }, { i })
+    }
+
+    func testNonZeroReadIsReturnedImmediately() throws {
+        let (read, calls) = reader([35])
+        XCTAssertEqual(try MonitorController.confirmedVolume(readOnce: read), 35)
+        XCTAssertEqual(calls(), 1)
+    }
+
+    func testBogusZeroIsReplacedByRetry() throws {
+        let (read, _) = reader([0, 0, 35])
+        XCTAssertEqual(try MonitorController.confirmedVolume(readOnce: read), 35)
+    }
+
+    func testRepeatedZeroIsTrusted() throws {
+        let (read, calls) = reader([0])
+        XCTAssertEqual(try MonitorController.confirmedVolume(readOnce: read), 0)
+        XCTAssertEqual(calls(), 4)
+    }
 }

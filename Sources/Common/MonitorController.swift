@@ -15,7 +15,22 @@ public class MonitorController {
         self.activeMonitorId = config.monitorId
     }
 
+    /// Reads the monitor's volume. m1ddc sometimes reports a bogus 0 with a success
+    /// exit status, so a 0 is re-read a few times and only trusted if it repeats.
     public func getCurrentVolume() throws -> Int {
+        try Self.confirmedVolume(readOnce: readVolumeOnce)
+    }
+
+    static func confirmedVolume(retries: Int = 3, readOnce: () throws -> Int) throws -> Int {
+        let first = try readOnce()
+        guard first == 0 else { return first }
+        for _ in 0..<retries {
+            if let v = try? readOnce(), v != 0 { return v }
+        }
+        return 0
+    }
+
+    private func readVolumeOnce() throws -> Int {
         let output = try run("display", activeMonitorId, "get", "volume")
         guard let volume = Int(output.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             throw MonitorError.unexpectedOutput(output)
